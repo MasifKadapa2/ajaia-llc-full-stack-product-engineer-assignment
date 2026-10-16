@@ -47,6 +47,7 @@ function DocumentEditorInner({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [inaccessible, setInaccessible] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(serverUpdatedAt);
+  const updatedAtRef = useRef(serverUpdatedAt);
   const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
 
   const latestPayloadRef = useRef({
@@ -129,7 +130,7 @@ function DocumentEditorInner({
         documentId,
         title: access.canRename ? payload.title : undefined,
         content: payload.content,
-        expectedUpdatedAt: updatedAt,
+        expectedUpdatedAt: updatedAtRef.current,
       });
 
       if (generation !== saveGenerationRef.current) {
@@ -163,11 +164,12 @@ function DocumentEditorInner({
 
       lastSaveToastRef.current = null;
       lastSavedSnapshotRef.current = snapshot;
+      updatedAtRef.current = result.data.updated_at;
       setUpdatedAt(result.data.updated_at);
       setHasUnsavedEdits(false);
       setSaveStatus("saved");
     },
-    [documentId, syncSaveStatus, updatedAt, access.canRename],
+    [documentId, syncSaveStatus, access.canRename],
   );
 
   const scheduleSave = useCallback(
