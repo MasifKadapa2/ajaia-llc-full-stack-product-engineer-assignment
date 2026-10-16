@@ -75,7 +75,15 @@ export function UserMenu({ user }: { user: SessionUser }) {
             className="w-full justify-start gap-2 px-2 font-normal"
             onClick={() => {
               setOpen(false);
-              signOut().catch(() => {
+              // signOut() always ends with redirect("/login"), which Next.js
+              // surfaces as a NEXT_REDIRECT rejection — not a real failure.
+              // Swallow that, toast only on genuine errors.
+              signOut().catch((e: unknown) => {
+                const digest =
+                  typeof e === "object" && e !== null && "digest" in e
+                    ? String((e as { digest: unknown }).digest)
+                    : "";
+                if (digest.startsWith("NEXT_REDIRECT")) return;
                 appToast.error(
                   "Sign out failed",
                   "Try again or open /logout in your browser.",
