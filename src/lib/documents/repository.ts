@@ -44,9 +44,10 @@ export async function listOwnedDocuments(
 ): Promise<DocumentListItem[]> {
   let query = supabase
     .from("documents")
-    .select("*")
+    .select("id,title,owner_id,updated_at,created_at")
     .eq("owner_id", userId)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .limit(100);
 
   if (search?.trim()) {
     query = query.ilike("title", `%${search.trim()}%`);
@@ -58,18 +59,14 @@ export async function listOwnedDocuments(
     throw new Error(error.message);
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, display_name")
-    .eq("id", userId)
-    .maybeSingle();
-
   return (data ?? []).map((row) =>
-    mapListItem(row as Document, {
-      owner: profile ?? undefined,
-      accessRole: "owner",
-      accessLabel: "Owner",
-    }),
+    mapListItem(
+      { ...(row as object), content: EMPTY_DOC_CONTENT } as unknown as Document,
+      {
+        accessRole: "owner",
+        accessLabel: "Owner",
+      },
+    ),
   );
 }
 
@@ -80,36 +77,38 @@ export async function listSharedWithMe(
 ): Promise<DocumentListItem[]> {
   const { data: shares, error: shareError } = await supabase
     .from("document_shares")
-    .select("permission, document:documents(*)")
-    .eq("shared_with_user_id", userId);
+    .select("permission, document:documents(id,title,owner_id,updated_at,created_at)")
+    .eq("shared_with_user_id", userId)
+    .limit(100);
 
   if (shareError) {
     throw new Error(shareError.message);
   }
 
-  const items: DocumentListItem[] = [];
+  const docs = (shares ?? [])
+    .map((row) => ({
+      permission: row.permission as DocumentListItem["accessRole"],
+      doc: row.document as unknown as Omit<Document, "content"> | null,
+    }))
+    .filter((r): r is { permission: DocumentListItem["accessRole"]; doc: Omit<Document, "content"> } => !!r.doc)
+    .filter((r) => !search?.trim() || r.doc.title.toLowerCase().includes(search.trim().toLowerCase()));
 
-  for (const row of shares ?? []) {
-    const doc = row.document as unknown as Document | null;
-    if (!doc) continue;
-    if (search?.trim() && !doc.title.toLowerCase().includes(search.trim().toLowerCase())) {
-      continue;
-    }
+  if (docs.length === 0) return [];
 
-    const ownerProfile = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .eq("id", doc.owner_id)
-      .maybeSingle();
+  const ownerIds = [...new Set(docs.map((r) => r.doc.owner_id))];
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, display_name")
+    .in("id", ownerIds);
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id as string, p]));
 
-    items.push(
-      mapListItem(doc, {
-        owner: ownerProfile.data ?? undefined,
-        accessRole: row.permission as DocumentListItem["accessRole"],
-        accessLabel: row.permission === "editor" ? "Editor" : "Viewer",
-      }),
-    );
-  }
+  const items = docs.map(({ permission, doc }) =>
+    mapListItem({ ...doc, content: EMPTY_DOC_CONTENT } as unknown as Document, {
+      owner: profileMap.get(doc.owner_id) as DocumentListItem["owner"],
+      accessRole: permission,
+      accessLabel: permission === "editor" ? "Editor" : "Viewer",
+    }),
+  );
 
   items.sort(
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
@@ -123,60 +122,63 @@ export async function listAllAccessibleDocuments(
   userId: string,
   search?: string,
 ): Promise<DocumentListItem[]> {
-  let query = supabase.from("documents").select("*").order("updated_at", { ascending: false });
+  let query = supabase
+    .from("documents")
+    .select("id,title,owner_id,updated_at,created_at")
+    .order("updated_at", { ascending: false })
+    .limit(100);
 
   if (search?.trim()) {
     query = query.ilike("title", `%${search.trim()}%`);
   }
 
-  const { data, error } = await query;
+  const [{ data, error }, { data: myShares }] = await Promise.all([
+    query,
+    supabase
+      .from("document_shares")
+      .select("document_id,permission")
+      .eq("shared_with_user_id", userId),
+  ]);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const profileIds = new Set<string>();
-  for (const row of data ?? []) {
-    profileIds.add((row as Document).owner_id);
-  }
+  const shareMap = new Map(
+    (myShares ?? []).map((s) => [s.document_id as string, s.permission as DocumentListItem["accessRole"]]),
+  );
 
+  const rows = (data ?? []) as unknown as Omit<Document, "content">[];
+  // RLS already restricts to owned + shared, but keep client-side guard
+  const visible = rows.filter((row) => row.owner_id === userId || shareMap.has(row.id));
+  if (visible.length === 0) return [];
+
+  const profileIds = [...new Set(visible.map((r) => r.owner_id))];
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, display_name")
-    .in("id", [...profileIds]);
+    .in("id", profileIds);
 
   const profileMap = new Map(
     (profiles ?? []).map((p) => [p.id as string, p as { id: string; display_name: string }]),
   );
 
-  const results: DocumentListItem[] = [];
-
-  for (const row of data ?? []) {
-    const doc = mapDocument(row as Document);
+  return visible.map((row) => {
+    const doc = { ...row, content: EMPTY_DOC_CONTENT } as unknown as Document;
     if (doc.owner_id === userId) {
-      results.push(
-        mapListItem(doc, {
-          owner: profileMap.get(userId),
-          accessRole: "owner",
-          accessLabel: "Owner",
-        }),
-      );
-      continue;
+      return mapListItem(doc, {
+        owner: profileMap.get(userId),
+        accessRole: "owner",
+        accessLabel: "Owner",
+      });
     }
-
-    const share = await getShareForUserOnDocument(supabase, userId, doc.id);
-    if (!share) continue;
-
-    results.push(
-      mapListItem(doc, {
-        owner: profileMap.get(doc.owner_id),
-        accessRole: share.permission,
-        accessLabel: share.permission === "editor" ? "Editor" : "Viewer",
-      }),
-    );
-  }
-
-  return results;
+    const permission = shareMap.get(doc.id) ?? "viewer";
+    return mapListItem(doc, {
+      owner: profileMap.get(doc.owner_id),
+      accessRole: permission,
+      accessLabel: permission === "editor" ? "Editor" : "Viewer",
+    });
+  });
 }
 
 export async function getDocumentWithAccess(
