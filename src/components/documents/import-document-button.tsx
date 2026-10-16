@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button";
 import { appToast } from "@/lib/toast";
 import { IMPORT_MAX_BYTES } from "@/lib/validation/import";
 import { FileUp } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export function ImportDocumentButton() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const router = useRouter();
 
   function handlePick() {
@@ -19,7 +19,7 @@ export function ImportDocumentButton() {
     inputRef.current?.click();
   }
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -31,7 +31,9 @@ export function ImportDocumentButton() {
       return;
     }
 
-    startTransition(async () => {
+    if (pending) return;
+    setPending(true);
+    try {
       const text = await file.text();
       const result = await importDocumentAction({
         filename: file.name,
@@ -45,7 +47,9 @@ export function ImportDocumentButton() {
         setError(result.error);
         appToast.error("Import failed", result.error);
       }
-    });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -63,10 +67,14 @@ export function ImportDocumentButton() {
         className="w-full justify-start gap-2"
         onClick={handlePick}
         disabled={pending}
+        title="Import a .txt or .md file (max 1 MB)"
       >
         <FileUp className="size-4" aria-hidden />
         {pending ? "Importing…" : "Import Document"}
       </Button>
+      <p className="text-xs text-muted-foreground">
+        Supports .txt, .md files · max 1 MB
+      </p>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
