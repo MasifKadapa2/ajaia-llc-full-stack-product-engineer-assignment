@@ -147,10 +147,11 @@ export async function deleteDocumentAction(
   );
 
   if (result.ok) {
+    // Only revalidate lists. Revalidating the deleted doc path is wasteful
+    // and adds latency to the delete redirect.
     revalidatePath("/documents");
     revalidatePath("/documents/mine");
     revalidatePath("/documents/shared");
-    revalidatePath(`/documents/${documentId}`);
   }
 
   return result;

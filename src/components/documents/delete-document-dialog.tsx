@@ -43,8 +43,10 @@ export function DeleteDocumentDialog({
       if (result.ok) {
         setOpen(false);
         appToast.success("Document deleted", "The document was permanently removed.");
+        // Navigate immediately — the target page fetches fresh data itself.
+        // No router.refresh() here: replace already triggers a server fetch,
+        // and refresh() would double it (2x Supabase roundtrips).
         router.replace("/documents/mine");
-        router.refresh();
       } else {
         appToast.error("Could not delete document", result.error);
       }
