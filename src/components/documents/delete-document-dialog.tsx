@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { appToast } from "@/lib/toast";
 import { Trash2, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type DeleteDocumentDialogProps = {
   documentId: string;
@@ -17,7 +17,7 @@ export function DeleteDocumentDialog({
   documentTitle,
 }: DeleteDocumentDialogProps) {
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const router = useRouter();
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -35,18 +35,22 @@ export function DeleteDocumentDialog({
     if (open) panelRef.current?.focus();
   }, [open]);
 
-  function handleDelete() {
-    startTransition(async () => {
+  async function handleDelete() {
+    if (pending) return;
+    setPending(true);
+    try {
       const result = await deleteDocumentAction(documentId);
       if (result.ok) {
-        appToast.success("Document deleted", "The document was permanently removed.");
         setOpen(false);
-        router.push("/documents/mine");
+        appToast.success("Document deleted", "The document was permanently removed.");
+        router.replace("/documents/mine");
         router.refresh();
       } else {
         appToast.error("Could not delete document", result.error);
       }
-    });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
