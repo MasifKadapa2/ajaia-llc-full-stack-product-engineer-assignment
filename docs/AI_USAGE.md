@@ -1,6 +1,6 @@
 # AI usage in Papertrail engineering
 
-Papertrail the product contains **no AI features** — no assistant, summarizer, generator, or MCP client. AI was used as a **build tool**. Prior chat prompts and agent execution logs are **not in this repo and inaccessible**; claims below rest on files present (`AI_WORKFLOW.md`, tests, migrations, git history), not on recalled conversations.
+Papertrail the product contains **no AI features** — no assistant, summarizer, generator, or MCP client. AI was used as a **build tool**. Prior chat prompts and agent execution logs are **not in this repo and inaccessible**; claims below rest on files present (tests, migrations, git history), not on recalled conversations.
 
 ## Tools actually used
 
