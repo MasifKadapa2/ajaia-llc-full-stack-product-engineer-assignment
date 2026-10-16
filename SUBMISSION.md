@@ -6,8 +6,8 @@
 
 | Item | Value |
 | ---- | ----- |
-| Deployed app | **TODO:** `https://` |
-| Repository | **TODO:** `https://github.com/...` |
+| Deployed app | `https://papertrail-bay.vercel.app` (stable alias; hashed prod `https://papertrail-8ve7tbyhg-masif-kadapas-projects.vercel.app`) — redeploy required after `aa25394` |
+| Repository | `https://github.com/MasifKadapa2/ajaia-llc-full-stack-product-engineer-assignment` |
 | Walkthrough video | See `VIDEO_URL.md` |
 
 ## Test status (actual exit codes)

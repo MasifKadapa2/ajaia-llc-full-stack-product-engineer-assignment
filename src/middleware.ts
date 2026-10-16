@@ -6,7 +6,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Only refresh session where auth matters. Skips `/` marketing page
+  // (uses local getClaims, no refresh needed) to save 1 Supabase roundtrip.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/documents/:path*",
+    "/login",
+    "/signup",
+    "/logout",
   ],
 };
