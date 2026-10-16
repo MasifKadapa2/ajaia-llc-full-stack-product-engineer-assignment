@@ -130,10 +130,13 @@ export async function saveDocumentAction(input: {
     ),
   );
 
-  if (result.ok) {
+  // Do NOT revalidate on every autosave — it runs every ~800ms while typing
+  // and forces 3x list re-renders. Lists only show title/updated_at:
+  // revalidate only when title actually changed (owner rename).
+  // Content edits are visible on the open doc already; no revalidation needed.
+  if (result.ok && input.title !== undefined) {
     revalidatePath("/documents");
-    revalidatePath(`/documents/${input.documentId}`);
-    revalidatePath("/documents/shared");
+    revalidatePath("/documents/mine");
   }
 
   return result;
